@@ -1,0 +1,74 @@
+---
+# roles/nginx/tasks/main.yml
+# Install and configure Nginx as a reverse proxy (for non-Docker deployments)
+# In Docker deployments, Nginx runs inside the frontend container
+
+- name: Install Nginx and Certbot
+  apt:
+    name:
+      - nginx
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Remove default Nginx site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  become: yes
+  notify: Reload Nginx
+
+- name: Deploy Nginx site configuration
+  template:
+    src: taskflow.conf.j2
+    dest: /etc/nginx/sites-available/taskflow
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  notify: Reload Nginx
+
+- name: Enable TaskFlow site
+  file:
+    src: /etc/nginx/sites-available/taskflow
+    dest: /etc/nginx/sites-enabled/taskflow
+    state: link
+  become: yes
+  notify: Reload Nginx
+
+- name: Test Nginx configuration
+  command: nginx -t
+  become: yes
+  changed_when: false
+
+- name: Start and enable Nginx
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Obtain Let's Encrypt SSL certificate
+  command: >
+    certbot --nginx
+    -d {{ app_domain }}
+    --non-interactive
+    --agree-tos
+    --email {{ admin_email }}
+    --redirect
+  args:
+    creates: "/etc/letsencrypt/live/{{ app_domain }}/fullchain.pem"
+  become: yes
+  when: enable_ssl | default(true)
+
+- name: Schedule certificate auto-renewal
+  cron:
+    name: "Certbot renew"
+    minute: "0"
+    hour: "3"
+    weekday: "1"
+    job: "certbot renew --quiet --post-hook 'systemctl reload nginx'"
+    user: root
+  become: yes

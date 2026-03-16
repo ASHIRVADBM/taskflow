@@ -1,0 +1,36 @@
+---
+# roles/db/tasks/main.yml
+# Configures PostgreSQL backup and monitoring on the DB server
+
+- name: Install PostgreSQL client tools
+  apt:
+    name:
+      - postgresql-client
+      - pg-activity
+    state: present
+  become: yes
+
+- name: Create backup script
+  copy:
+    dest: /opt/taskflow/backup.sh
+    mode: '0755'
+    content: |
+      #!/bin/bash
+      BACKUP_DIR=/opt/taskflow/backups
+      TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+      mkdir -p $BACKUP_DIR
+      docker exec taskflow-db pg_dumpall -U postgres \
+        | gzip > "$BACKUP_DIR/taskflow_$TIMESTAMP.sql.gz"
+      # Keep last 7 backups
+      find $BACKUP_DIR -name "*.sql.gz" -mtime +7 -delete
+      echo "Backup completed: taskflow_$TIMESTAMP.sql.gz"
+  become: yes
+
+- name: Schedule daily backups via cron
+  cron:
+    name: "TaskFlow DB Backup"
+    minute: "0"
+    hour: "2"
+    job: "/opt/taskflow/backup.sh >> /var/log/taskflow-backup.log 2>&1"
+    user: "{{ ansible_user }}"
+  become: yes

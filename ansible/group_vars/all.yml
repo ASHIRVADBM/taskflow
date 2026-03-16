@@ -1,0 +1,33 @@
+# ── Group Variables: all ──────────────────────────────────────────────────────
+# ansible/group_vars/all.yml
+
+app_name: taskflow
+app_dir: /opt/taskflow
+docker_compose_file: "{{ app_dir }}/docker-compose.yml"
+
+# Docker image registry
+registry: ghcr.io
+github_username: YOUR_GITHUB_USERNAME
+backend_image:  "{{ registry }}/{{ github_username }}/taskflow-backend"
+frontend_image: "{{ registry }}/{{ github_username }}/taskflow-frontend"
+image_tag: latest
+
+# Database (override in vault for production!)
+db_name: taskflow
+db_user: postgres
+db_password: "{{ vault_db_password }}"   # stored in ansible-vault
+
+# System packages to install on all hosts
+system_packages:
+  - curl
+  - wget
+  - git
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+
+# Firewall allowed ports
+firewall_rules:
+  - { port: 22,  proto: tcp, comment: "SSH" }
+  - { port: 80,  proto: tcp, comment: "HTTP" }
+  - { port: 443, proto: tcp, comment: "HTTPS" }

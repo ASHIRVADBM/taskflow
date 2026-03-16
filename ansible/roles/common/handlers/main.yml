@@ -1,0 +1,18 @@
+---
+# roles/common/handlers/main.yml
+
+- name: Restart SSH
+  systemd:
+    name: sshd
+    state: restarted
+  become: yes
+
+- name: Restart Docker
+  systemd:
+    name: docker
+    state: restarted
+  become: yes
+
+- name: Reload UFW
+  command: ufw reload
+  become: yes

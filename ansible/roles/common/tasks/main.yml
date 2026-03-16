@@ -1,0 +1,117 @@
+---
+# roles/common/tasks/main.yml
+# Runs on ALL hosts: system hardening, Docker installation, firewall setup
+
+# ── System Update ──────────────────────────────────────────────────────────────
+- name: Update apt cache and upgrade system packages
+  apt:
+    update_cache: yes
+    upgrade: dist
+    cache_valid_time: 3600
+  become: yes
+
+- name: Install required system packages
+  apt:
+    name: "{{ system_packages }}"
+    state: present
+  become: yes
+
+# ── Docker Installation ────────────────────────────────────────────────────────
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+  become: yes
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+  become: yes
+
+- name: Install Docker CE and CLI
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Add ansible user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+  become: yes
+
+# ── Docker Compose Standalone ──────────────────────────────────────────────────
+- name: Install Docker Compose standalone binary
+  get_url:
+    url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'
+  become: yes
+
+# ── Firewall (UFW) ─────────────────────────────────────────────────────────────
+- name: Configure UFW default policies
+  ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+  become: yes
+
+- name: Allow required firewall ports
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ firewall_rules }}"
+  become: yes
+
+- name: Enable UFW firewall
+  ufw:
+    state: enabled
+  become: yes
+
+# ── SSH Hardening ──────────────────────────────────────────────────────────────
+- name: Disable root SSH login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+    state: present
+  become: yes
+  notify: Restart SSH
+
+- name: Disable password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+  become: yes
+  notify: Restart SSH
+
+# ── Application Directory ──────────────────────────────────────────────────────
+- name: Create application directory
+  file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+  become: yes

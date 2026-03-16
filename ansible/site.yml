@@ -1,0 +1,39 @@
+---
+# ── TaskFlow: Master Ansible Playbook ─────────────────────────────────────────
+# Usage:
+#   ansible-playbook -i inventory/hosts.ini site.yml
+#   ansible-playbook -i inventory/hosts.ini site.yml --ask-vault-pass
+#   ansible-playbook -i inventory/hosts.ini site.yml --tags deploy
+#   ansible-playbook -i inventory/hosts.ini site.yml --limit web01
+
+- name: "Phase 1 — Common: Configure all hosts"
+  hosts: all
+  become: yes
+  gather_facts: yes
+  tags: [common, setup]
+  roles:
+    - common
+
+- name: "Phase 2 — Database: Configure PostgreSQL host"
+  hosts: dbservers
+  become: yes
+  gather_facts: yes
+  tags: [database, db]
+  roles:
+    - db
+
+- name: "Phase 3 — App: Deploy TaskFlow application"
+  hosts: webservers
+  become: yes
+  gather_facts: yes
+  tags: [app, deploy]
+  roles:
+    - app
+
+- name: "Phase 4 — Nginx: Configure reverse proxy"
+  hosts: webservers
+  become: yes
+  gather_facts: yes
+  tags: [nginx, proxy]
+  roles:
+    - nginx

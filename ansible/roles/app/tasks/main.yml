@@ -1,0 +1,75 @@
+---
+# roles/app/tasks/main.yml
+# Deploys TaskFlow application using Docker Compose
+
+# ── GitHub Container Registry Login ───────────────────────────────────────────
+- name: Log in to GitHub Container Registry
+  docker_login:
+    registry: "{{ registry }}"
+    username: "{{ github_username }}"
+    password: "{{ vault_ghcr_token }}"   # stored in ansible-vault
+  become: yes
+  no_log: true   # never log credentials
+
+# ── Copy Configuration Files ───────────────────────────────────────────────────
+- name: Copy docker-compose.yml to server
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ app_dir }}/docker-compose.yml"
+    owner: "{{ ansible_user }}"
+    mode: '0644'
+  become: yes
+
+- name: Create .env file from template
+  template:
+    src: env.j2
+    dest: "{{ app_dir }}/.env"
+    owner: "{{ ansible_user }}"
+    mode: '0600'   # restrictive — contains secrets
+  become: yes
+  no_log: true
+
+# ── Pull Latest Images ─────────────────────────────────────────────────────────
+- name: Pull latest Docker images
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    pull: always
+  become: yes
+  register: pull_result
+
+- name: Show pulled images
+  debug:
+    msg: "Pulled images: {{ pull_result }}"
+
+# ── Deploy / Restart Services ──────────────────────────────────────────────────
+- name: Deploy application with Docker Compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    state: present
+    recreate: auto
+    remove_orphans: yes
+  become: yes
+  register: deploy_result
+
+# ── Health Check ───────────────────────────────────────────────────────────────
+- name: Wait for backend to be healthy
+  uri:
+    url: "http://localhost:5000/health"
+    status_code: 200
+  register: health_check
+  until: health_check.status == 200
+  retries: 12
+  delay: 10
+
+- name: Wait for frontend to be healthy
+  uri:
+    url: "http://localhost:80/health"
+    status_code: 200
+  register: frontend_health
+  until: frontend_health.status == 200
+  retries: 12
+  delay: 10
+
+- name: Confirm deployment success
+  debug:
+    msg: "✅ TaskFlow deployed successfully on {{ inventory_hostname }}"

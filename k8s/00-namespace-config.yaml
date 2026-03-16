@@ -1,0 +1,38 @@
+---
+# ── Namespace ──────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: taskflow
+  labels:
+    app: taskflow
+    environment: production
+
+---
+# ── ConfigMap (non-sensitive config) ──────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskflow-config
+  namespace: taskflow
+data:
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "taskflow"
+  NODE_ENV: "production"
+  PORT: "5000"
+
+---
+# ── Secret (sensitive credentials) ───────────────────────────────────────────
+# In production, use Sealed Secrets or Vault. These are base64-encoded examples.
+# echo -n 'postgres' | base64   =>  cG9zdGdyZXM=
+# echo -n 'taskflow' | base64   =>  dGFza2Zsb3c=
+apiVersion: v1
+kind: Secret
+metadata:
+  name: taskflow-secrets
+  namespace: taskflow
+type: Opaque
+data:
+  DB_USER:     cG9zdGdyZXM=       # postgres
+  DB_PASSWORD: U3Ryb25nUEBzc3cwcmQh  # StrongP@ssw0rd!
