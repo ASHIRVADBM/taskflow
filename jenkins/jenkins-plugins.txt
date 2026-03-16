@@ -1,0 +1,46 @@
+# ── Jenkins Required Plugins for TaskFlow Pipeline ───────────────────────────
+# Install via: Manage Jenkins → Plugins → Available
+# Or auto-install with jenkins-plugin-cli
+
+# Pipeline & SCM
+workflow-aggregator
+git
+github
+github-branch-source
+pipeline-github-lib
+
+# Node.js support
+nodejs
+
+# Docker
+docker-workflow
+docker-plugin
+
+# Testing & Coverage
+junit
+cobertura
+warnings-ng
+
+# Code Quality
+checkstyle
+pmd
+
+# Notifications
+slack
+email-ext
+mailer
+
+# Credentials & Security
+credentials-binding
+ssh-agent
+ansible
+
+# UI Enhancements
+ansicolor
+timestamper
+build-timeout
+ws-cleanup
+
+# Kubernetes (optional - for K8s deploy)
+kubernetes
+kubernetes-cli

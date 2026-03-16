@@ -1,0 +1,157 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Jenkins Configuration as Code (JCasC)
+# File: jenkins/jenkins-casc.yml
+# Place at: $JENKINS_HOME/casc_configs/jenkins.yml
+# Plugin required: configuration-as-code
+# ─────────────────────────────────────────────────────────────────────────────
+
+jenkins:
+  systemMessage: "TaskFlow CI/CD Jenkins Server — Managed by JCasC"
+  numExecutors: 4
+  mode: NORMAL
+
+  # ── Security ──────────────────────────────────────────────────────────────
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+  # ── Global Credentials ────────────────────────────────────────────────────
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: "github-token"
+              description: "GitHub Personal Access Token (workflow scope)"
+              secret: "${GITHUB_TOKEN}"
+
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
+              id: "prod-ssh-key"
+              description: "Production server SSH key"
+              username: "ubuntu"
+              privateKeySource:
+                directEntry:
+                  privateKey: "${PROD_SSH_KEY}"
+
+          - basicSSHUserPrivateKey:
+              scope: GLOBAL
+              id: "staging-ssh-key"
+              description: "Staging server SSH key"
+              username: "ubuntu"
+              privateKeySource:
+                directEntry:
+                  privateKey: "${STAGING_SSH_KEY}"
+
+          - string:
+              scope: GLOBAL
+              id: "db-password"
+              description: "PostgreSQL database password"
+              secret: "${DB_PASSWORD}"
+
+          - string:
+              scope: GLOBAL
+              id: "slack-webhook-url"
+              description: "Slack incoming webhook URL"
+              secret: "${SLACK_WEBHOOK_URL}"
+
+          - file:
+              scope: GLOBAL
+              id: "ansible-vault-password"
+              description: "Ansible Vault password file"
+              fileName: ".vault_pass"
+              secretBytes: "${ANSIBLE_VAULT_PASSWORD_BASE64}"
+
+          - string:
+              scope: GLOBAL
+              id: "staging-inventory"
+              description: "Ansible staging inventory content"
+              secret: "${STAGING_INVENTORY}"
+
+          - string:
+              scope: GLOBAL
+              id: "prod-inventory"
+              description: "Ansible production inventory content"
+              secret: "${PROD_INVENTORY}"
+
+# ── Tool Configuration ────────────────────────────────────────────────────────
+tool:
+  nodejs:
+    installations:
+      - name: "NodeJS-20"
+        properties:
+          - installSource:
+              installers:
+                - nodeJSInstaller:
+                    id: "20.11.0"
+                    npmPackages: ""
+                    npmPackagesRefreshHours: 72
+
+  git:
+    installations:
+      - name: "Default"
+        home: "git"
+
+# ── Slack Notification Config ─────────────────────────────────────────────────
+unclassified:
+  slackNotifier:
+    teamDomain: "your-workspace"
+    tokenCredentialId: "slack-webhook-url"
+    room: "#deployments"
+    sendAs: "TaskFlow Jenkins"
+
+  # GitHub server config
+  gitHubPluginConfig:
+    configs:
+      - name: "GitHub"
+        apiUrl: "https://api.github.com"
+        credentialsId: "github-token"
+        manageHooks: true
+
+  # Email config
+  mailer:
+    smtpHost: "smtp.gmail.com"
+    smtpPort: "587"
+    useSsl: false
+    useTls: true
+    defaultSuffix: "@gmail.com"
+
+# ── Pipeline Jobs ──────────────────────────────────────────────────────────────
+jobs:
+  - script: >
+      multibranchPipelineJob('taskflow') {
+        description('TaskFlow Multi-Tier Web Application CI/CD')
+        branchSources {
+          github {
+            id('taskflow-github')
+            credentialsId('github-token')
+            repoOwner('ASHIRVADBM')
+            repository('taskflow')
+            traits {
+              gitHubBranchDiscovery { strategyId(1) }
+              gitHubPullRequestDiscovery { strategyId(1) }
+            }
+          }
+        }
+        factory {
+          workflowBranchProjectFactory {
+            scriptPath('Jenkinsfile')
+          }
+        }
+        triggers {
+          periodic(1)
+        }
+        orphanedItemStrategy {
+          discardOldItems {
+            numToKeep(5)
+          }
+        }
+      }

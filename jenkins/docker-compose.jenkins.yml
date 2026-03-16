@@ -1,0 +1,63 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Jenkins CI Server Setup
+# Run: docker compose -f jenkins/docker-compose.jenkins.yml up -d
+# Access: http://localhost:8080
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  jenkins-net:
+    driver: bridge
+
+volumes:
+  jenkins_home:
+    driver: local
+  jenkins_docker_certs:
+    driver: local
+
+services:
+
+  # ── Jenkins Controller ────────────────────────────────────────────────────
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    container_name: taskflow-jenkins
+    restart: unless-stopped
+    privileged: true
+    user: root
+    ports:
+      - "8080:8080"       # Web UI
+      - "50000:50000"     # Agent communication port
+    environment:
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_CERT_PATH=/certs/client
+      - DOCKER_TLS_VERIFY=1
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - jenkins_docker_certs:/certs/client:ro
+      - ./jenkins-plugins.txt:/usr/share/jenkins/ref/plugins.txt:ro
+    networks:
+      - jenkins-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ── Docker-in-Docker (so Jenkins can build images) ───────────────────────
+  docker:
+    image: docker:dind
+    container_name: taskflow-jenkins-dind
+    restart: unless-stopped
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - jenkins_docker_certs:/certs/client
+      - jenkins_home:/var/jenkins_home
+    ports:
+      - "2376:2376"
+    networks:
+      jenkins-net:
+        aliases:
+          - docker
